@@ -4,3 +4,8 @@ export type User = {
   isReady: boolean;
   gameProgress: number;
 };
+
+export type Room = {
+  name: string;
+  userCount: number;
+};
