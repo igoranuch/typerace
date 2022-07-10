@@ -2,10 +2,11 @@ export type User = {
   id: string;
   name: string;
   isReady: boolean;
-  gameProgress: number;
+  room: string | null;
+  progress: number;
 };
 
 export type Room = {
   name: string;
-  userCount: number;
+  numberOfUsers: number;
 };
