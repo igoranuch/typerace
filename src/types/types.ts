@@ -9,4 +9,6 @@ export type User = {
 export type Room = {
   name: string;
   numberOfUsers: number;
+  isFull: boolean;
+  timerStarted: boolean;
 };

@@ -1,7 +1,8 @@
 import { showInputModal, showMessageModal } from "./views/modal.mjs";
 import { appendRoomElement, removeRoomElement, updateNumberOfUsersInRoom } from "./views/room.mjs";
 import { addClass, removeClass } from "./helpers/domHelper.mjs";
-import { appendUserElement, changeReadyStatus, setProgress, removeUserElement } from "./views/user.mjs";
+import { appendUserElement, changeReadyStatus, removeUserElement } from "./views/user.mjs";
+import { getText } from "./api/api.mjs";
 
 const username = sessionStorage.getItem("username");
 
@@ -13,7 +14,9 @@ const usersContainer = document.getElementById("users-wrapper");
 const roomsContainer = document.getElementById("rooms-wrapper");
 const roomNameTag = document.getElementById("room-name");
 const readyButton = document.getElementById("ready-btn");
-const readyStatus = document.getElementById("ready-status");
+const startTimer = document.getElementById("timer");
+const gameTimer = document.getElementById("game-timer");
+const textContainer = document.getElementById("text-container");
 
 if (!username) {
   window.location.replace("/login");
@@ -36,35 +39,40 @@ const handleCommonUsernames = () => {
 const updateRooms = (rooms) => {
   roomsContainer.innerHTML = "";
   rooms.forEach((room) => {
-    appendRoomElement({
-      name: room.name,
-      numberOfUsers: room.numberOfUsers,
-      onJoin: () => {
-        joinRoom(room.name);
-      },
-    });
+    if (!room.isFull && !room.timerStarted)
+      appendRoomElement({
+        name: room.name,
+        numberOfUsers: room.numberOfUsers,
+        onJoin: () => {
+          joinRoom(room.name);
+        },
+      });
   });
+};
+
+const joinRoom = (roomName) => {
+  socket.emit("JOIN_ROOM", roomName);
+  addClass(roomsPage, "display-none");
+  removeClass(gamePage, "display-none");
+  roomNameTag.innerText = roomName;
 };
 
 const updateRoomUsers = (users) => {
   usersContainer.innerHTML = "";
   users.forEach((user) => {
-    console.log(user);
-    appendUserElement({
-      username: user.name,
-      ready: user.isReady,
-      isCurrentUser: user.name === username,
-    });
+    userJoinedRoom(user);
   });
 };
 
-const joinRoom = (roomName) => {
-  socket.emit("JOIN_ROOM", roomName, (isFull) => {
-    if (!isFull) {
-      addClass(roomsPage, "display-none");
-      removeClass(gamePage, "display-none");
-      roomNameTag.innerText = roomName;
-    }
+const userLeftRoom = (username) => {
+  removeUserElement(username);
+};
+
+const userJoinedRoom = (user) => {
+  appendUserElement({
+    username: user.name,
+    ready: user.isReady,
+    isCurrentUser: user.name === username,
   });
 };
 
@@ -104,8 +112,60 @@ leaveRoomButton.addEventListener("click", () => {
   removeClass(roomsPage, "display-none");
 });
 
+const startBeforeGameTimer = async (time, gameTime, textId) => {
+  const textObject = await getText(textId);
+  const text = textObject.text;
+  textContainer.innerText = text;
+
+  addClass(leaveRoomButton, "display-none");
+  addClass(readyButton, "display-none");
+
+  startTimer.innerText = time;
+  gameTimer.innerText = gameTime;
+  removeClass(startTimer, "display-none");
+
+  const beforeGameTimer = setInterval(function () {
+    if (time <= 0) {
+      clearInterval(beforeGameTimer);
+      addClass(startTimer, "display-none");
+      removeClass(gameTimer, "display-none");
+      removeClass(textContainer, "display-none");
+
+      addEventListener("keyup", handleKeyPress);
+
+      startGame(gameTime);
+    } else {
+      startTimer.innerText = time - 1;
+    }
+    time -= 1;
+  }, 1000);
+};
+
+const startGame = (time) => {
+  const timerForGame = setInterval(function () {
+    if (time <= 0) {
+      clearInterval(timerForGame);
+
+      removeEventListener("keyup", handleKeyPress);
+
+      socket.emit("GAME_OVER");
+    } else {
+      gameTimer.innerText = time - 1;
+    }
+    time -= 1;
+  }, 1000);
+};
+
+const handleKeyPress = (e) => {
+  console.log(textContainer.innerHTML);
+};
+
 socket.on("IS_ACTIVE_USER", handleCommonUsernames);
-socket.on("UPDATE_ROOMS", (rooms) => updateRooms(rooms));
-socket.on("UPDATE_ROOM_COUNTER", (room) => updateNumberOfUsersInRoom(room));
+socket.on("UPDATE_ROOMS", updateRooms);
+socket.on("UPDATE_ROOM_COUNTER", updateNumberOfUsersInRoom);
 socket.on("EMPTY_ROOM", removeRoomElement);
-socket.on("UPDATE_ROOM_USERS", (users) => updateRoomUsers(users));
+socket.on("UPDATE_ROOM_USERS", updateRoomUsers);
+socket.on("USER_LEFT_ROOM", userLeftRoom);
+socket.on("USER_JOINED_ROOM", userJoinedRoom);
+socket.on("CHANGE_USER_STATUS", changeReadyStatus);
+socket.on("START_GAME", startBeforeGameTimer);

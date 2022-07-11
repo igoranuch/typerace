@@ -1,5 +1,11 @@
-import { Server } from "socket.io";
-import { createRoom, deleteRoom, getRoom, isActiveRoom, updateNumberOfUsers } from "../services/roomService";
+import {
+  createRoom,
+  deleteRoom,
+  getRoom,
+  isActiveRoom,
+  updateNumberOfUsers,
+  updateRoomTimerStatus,
+} from "../services/roomService";
 import {
   addUserRoom,
   createUser,
@@ -9,9 +15,12 @@ import {
   isActiveUser,
   removeUserRoom,
   updateUserStatus,
+  usersStatus,
 } from "../services/userService";
+import { Server } from "socket.io";
+import { texts } from "../data";
 import { Room, User } from "../types/types";
-import * as config from "./config";
+import * as config from "../socket/config";
 
 let activeUsers: User[] = [];
 let activeRooms: Room[] = [];
@@ -30,8 +39,11 @@ export default (io: Server) => {
 
     socket.on("disconnect", () => {
       const user = getUser(activeUsers, socket.id);
-      handleLeaveRoom(socket);
-      if (user && user.room) io.in(user.room).emit("UPDATE_ROOM_USERS", getUsersFromRoom(activeUsers, user.room));
+
+      if (user && user.room) {
+        handleRoomLeave(socket);
+      }
+
       activeUsers = deleteUser(activeUsers, socket.id);
     });
 
@@ -42,56 +54,79 @@ export default (io: Server) => {
         activeRooms.push(newRoom);
         socket.emit("UPDATE_ROOMS", activeRooms);
         socket.broadcast.emit("UPDATE_ROOMS", activeRooms);
+        socket.emit("UPDATE_ROOM_USERS", getUsersFromRoom(activeUsers, roomName));
       }
       callback(isActive);
     });
 
-    socket.on("JOIN_ROOM", (roomName, callback) => {
-      const targetedRoom = getRoom(activeRooms, roomName);
-      const isFull = targetedRoom && targetedRoom.numberOfUsers === config.MAXIMUM_USERS_FOR_ONE_ROOM;
+    socket.on("JOIN_ROOM", (roomName) => {
+      activeRooms = updateNumberOfUsers(activeRooms, roomName, 1);
+      activeUsers = addUserRoom(activeUsers, socket.id, roomName);
+      socket.join(roomName);
 
-      if (!isFull) {
-        activeRooms = updateNumberOfUsers(activeRooms, roomName, 1);
-        activeUsers = addUserRoom(activeUsers, socket.id, roomName);
-        socket.join(roomName);
+      socket.emit("UPDATE_ROOM_USERS", getUsersFromRoom(activeUsers, roomName));
 
-        const updatedRoom = getRoom(activeRooms, roomName);
+      socket.broadcast.emit("UPDATE_ROOM_COUNTER", getRoom(activeRooms, roomName));
+      socket.broadcast.emit("UPDATE_ROOMS", activeRooms);
 
-        if (updatedRoom) {
-          socket.broadcast.emit("UPDATE_ROOM_COUNTER", updatedRoom);
-        }
-      }
-
-      callback(isFull);
-
-      io.in(roomName).emit("UPDATE_ROOM_USERS", getUsersFromRoom(activeUsers, roomName));
+      socket.to(roomName).emit("USER_JOINED_ROOM", getUser(activeUsers, socket.id));
     });
 
     socket.on("LEAVE_ROOM", (roomName) => {
-      handleLeaveRoom(socket);
+      handleRoomLeave(socket);
 
-      io.in(roomName).emit("UPDATE_ROOM_USERS", getUsersFromRoom(activeUsers, roomName));
+      if (handleGameStart(roomName)) {
+        activeRooms = updateRoomTimerStatus(activeRooms, roomName);
+
+        socket.emit("UPDATE_ROOMS", activeRooms);
+        socket.broadcast.emit("UPDATE_ROOMS", activeRooms);
+
+        io.to(roomName).emit("START_BEFORE_GAME_TIMER", config.SECONDS_TIMER_BEFORE_START_GAME, getRandomTextId(texts));
+      }
     });
 
     socket.on("UPDATE_USER_STATUS", (ready, roomName) => {
       activeUsers = updateUserStatus(activeUsers, socket.id, ready);
 
-      io.in(roomName).emit("UPDATE_ROOM_USERS", getUsersFromRoom(activeUsers, roomName));
+      io.in(roomName).emit("CHANGE_USER_STATUS", {
+        username: getUser(activeUsers, socket.id)?.name,
+        ready: getUser(activeUsers, socket.id)?.isReady,
+      });
+
+      if (handleGameStart(roomName)) {
+        activeRooms = updateRoomTimerStatus(activeRooms, roomName);
+
+        socket.emit("UPDATE_ROOMS", activeRooms);
+        socket.broadcast.emit("UPDATE_ROOMS", activeRooms);
+
+        io.to(roomName).emit(
+          "START_GAME",
+          config.SECONDS_TIMER_BEFORE_START_GAME,
+          config.SECONDS_FOR_GAME,
+          getRandomTextId(texts)
+        );
+      }
     });
   });
 };
 
-const handleLeaveRoom = (socket) => {
+const handleRoomLeave = (socket) => {
   const user = getUser(activeUsers, socket.id);
 
   if (user && user.room) {
-    activeRooms = updateNumberOfUsers(activeRooms, user.room, -1);
-    socket.leave(user.room);
-    activeUsers = removeUserRoom(activeUsers, socket.id);
+    socket.to(user.room).emit("USER_LEFT_ROOM", getUser(activeUsers, socket.id)?.name);
 
-    socket.emit("UPDATE_ROOMS", activeRooms);
-    socket.emit("UPDATE_ROOM_COUNTER", getRoom(activeRooms, user.room));
-    socket.broadcast.emit("UPDATE_ROOM_COUNTER", getRoom(activeRooms, user.room));
+    activeRooms = updateNumberOfUsers(activeRooms, user.room, -1);
+    activeUsers = removeUserRoom(activeUsers, socket.id);
+    socket.leave(user.room);
+
+    if (!getRoom(activeRooms, user.room)?.timerStarted) {
+      socket.emit("UPDATE_ROOM_COUNTER", getRoom(activeRooms, user.room));
+      socket.emit("UPDATE_ROOMS", activeRooms);
+
+      socket.broadcast.emit("UPDATE_ROOM_COUNTER", getRoom(activeRooms, user.room));
+      socket.broadcast.emit("UPDATE_ROOMS", activeRooms);
+    }
 
     handleEmptyRoom(socket, user);
   }
@@ -102,8 +137,27 @@ const handleEmptyRoom = (socket, user) => {
 
   if (room?.numberOfUsers === 0) {
     activeRooms = deleteRoom(activeRooms, room.name);
+
     socket.emit("EMPTY_ROOM", room.name);
     socket.emit("UPDATE_ROOMS", activeRooms);
+
+    socket.broadcast.emit("EMPTY_ROOM", room.name);
     socket.broadcast.emit("UPDATE_ROOMS", activeRooms);
   }
+};
+
+const handleGameStart = (roomName) => {
+  if (
+    usersStatus(activeUsers, roomName) &&
+    getUsersFromRoom(activeUsers, roomName).length >= 2 &&
+    !getRoom(activeRooms, roomName)?.timerStarted
+  ) {
+    return true;
+  } else {
+    return false;
+  }
+};
+
+export const getRandomTextId = (array) => {
+  return Math.floor(Math.random() * array.length);
 };

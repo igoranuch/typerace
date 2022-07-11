@@ -65,3 +65,9 @@ export const updateUserStatus = (activeUsers: User[], socketId: string, ready: b
       : user
   );
 };
+
+export const usersStatus = (activeUsers: User[], roomName: string) => {
+  const usersFromRoom = getUsersFromRoom(activeUsers, roomName);
+
+  return usersFromRoom.every((user) => user.isReady === true);
+};
