@@ -57,3 +57,11 @@ export const getUser = (activeUsers: User[], socketId: string) => {
 export const getUsersFromRoom = (activeUsers: User[], roomName: string) => {
   return activeUsers.filter((user) => user.room === roomName);
 };
+
+export const updateUserStatus = (activeUsers: User[], socketId: string, ready: boolean) => {
+  return activeUsers.map((user) =>
+    user.id === socketId
+      ? { id: user.id, name: user.name, isReady: ready, progress: user.progress, room: user.room }
+      : user
+  );
+};

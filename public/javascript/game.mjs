@@ -13,6 +13,7 @@ const usersContainer = document.getElementById("users-wrapper");
 const roomsContainer = document.getElementById("rooms-wrapper");
 const roomNameTag = document.getElementById("room-name");
 const readyButton = document.getElementById("ready-btn");
+const readyStatus = document.getElementById("ready-status");
 
 if (!username) {
   window.location.replace("/login");
@@ -48,6 +49,7 @@ const updateRooms = (rooms) => {
 const updateRoomUsers = (users) => {
   usersContainer.innerHTML = "";
   users.forEach((user) => {
+    console.log(user);
     appendUserElement({
       username: user.name,
       ready: user.isReady,
@@ -69,8 +71,6 @@ const joinRoom = (roomName) => {
 createRoomButton.addEventListener("click", () => {
   let roomName = "";
 
-  console.log(username);
-
   showInputModal({
     title: "Enter room name",
     onChange: (value) => {
@@ -90,6 +90,12 @@ createRoomButton.addEventListener("click", () => {
       });
     },
   });
+});
+
+readyButton.addEventListener("click", () => {
+  const ready = readyButton.innerText === "READY" ? true : false;
+  ready ? (readyButton.innerText = "NOT READY") : (readyButton.innerText = "READY");
+  socket.emit("UPDATE_USER_STATUS", ready, roomNameTag.innerText);
 });
 
 leaveRoomButton.addEventListener("click", () => {

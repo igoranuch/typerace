@@ -8,6 +8,7 @@ import {
   getUsersFromRoom,
   isActiveUser,
   removeUserRoom,
+  updateUserStatus,
 } from "../services/userService";
 import { Room, User } from "../types/types";
 import * as config from "./config";
@@ -28,7 +29,9 @@ export default (io: Server) => {
     socket.emit("UPDATE_ROOMS", activeRooms);
 
     socket.on("disconnect", () => {
+      const user = getUser(activeUsers, socket.id);
       handleLeaveRoom(socket);
+      if (user && user.room) io.in(user.room).emit("UPDATE_ROOM_USERS", getUsersFromRoom(activeUsers, user.room));
       activeUsers = deleteUser(activeUsers, socket.id);
     });
 
@@ -66,6 +69,12 @@ export default (io: Server) => {
 
     socket.on("LEAVE_ROOM", (roomName) => {
       handleLeaveRoom(socket);
+
+      io.in(roomName).emit("UPDATE_ROOM_USERS", getUsersFromRoom(activeUsers, roomName));
+    });
+
+    socket.on("UPDATE_USER_STATUS", (ready, roomName) => {
+      activeUsers = updateUserStatus(activeUsers, socket.id, ready);
 
       io.in(roomName).emit("UPDATE_ROOM_USERS", getUsersFromRoom(activeUsers, roomName));
     });
