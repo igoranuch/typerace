@@ -39,14 +39,14 @@ export const getRoom = (activeRooms: Room[], roomName: string) => {
   });
 };
 
-export const updateRoomTimerStatus = (activeRooms: Room[], roomName: string) => {
+export const updateRoomTimerStatus = (activeRooms: Room[], roomName: string, status: boolean) => {
   return activeRooms.map((room) =>
     room.name === roomName
       ? {
           name: room.name,
           numberOfUsers: room.numberOfUsers,
           isFull: room.isFull,
-          timerStarted: true,
+          timerStarted: status,
         }
       : room
   );

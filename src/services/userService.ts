@@ -71,3 +71,9 @@ export const usersStatus = (activeUsers: User[], roomName: string) => {
 
   return usersFromRoom.every((user) => user.isReady === true);
 };
+
+export const resetUserStatus = (activeUsers: User[], roomName: string) => {
+  return activeUsers.map((user) =>
+    roomName === user.room ? { id: user.id, name: user.name, isReady: false, progress: 0, room: user.room } : user
+  );
+};

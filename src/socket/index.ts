@@ -14,6 +14,7 @@ import {
   getUsersFromRoom,
   isActiveUser,
   removeUserRoom,
+  resetUserStatus,
   updateUserStatus,
   usersStatus,
 } from "../services/userService";
@@ -38,17 +39,14 @@ export default (io: Server) => {
     socket.emit("UPDATE_ROOMS", activeRooms);
 
     socket.on("disconnect", () => {
-      const user = getUser(activeUsers, socket.id);
-
-      if (user && user.room) {
-        handleRoomLeave(socket);
-      }
+      handleRoomLeave(socket);
 
       activeUsers = deleteUser(activeUsers, socket.id);
     });
 
     socket.on("CREATE_ROOM", (roomName, callback) => {
       const isActive = isActiveRoom(activeRooms, roomName);
+
       if (!isActive) {
         const newRoom: Room = createRoom(roomName, 0);
         activeRooms.push(newRoom);
@@ -56,6 +54,7 @@ export default (io: Server) => {
         socket.broadcast.emit("UPDATE_ROOMS", activeRooms);
         socket.emit("UPDATE_ROOM_USERS", getUsersFromRoom(activeUsers, roomName));
       }
+
       callback(isActive);
     });
 
@@ -65,49 +64,42 @@ export default (io: Server) => {
       socket.join(roomName);
 
       socket.emit("UPDATE_ROOM_USERS", getUsersFromRoom(activeUsers, roomName));
-
       socket.broadcast.emit("UPDATE_ROOM_COUNTER", getRoom(activeRooms, roomName));
       socket.broadcast.emit("UPDATE_ROOMS", activeRooms);
-
       socket.to(roomName).emit("USER_JOINED_ROOM", getUser(activeUsers, socket.id));
     });
 
     socket.on("LEAVE_ROOM", (roomName) => {
       handleRoomLeave(socket);
-
-      if (handleGameStart(roomName)) {
-        activeRooms = updateRoomTimerStatus(activeRooms, roomName);
-
-        socket.emit("UPDATE_ROOMS", activeRooms);
-        socket.broadcast.emit("UPDATE_ROOMS", activeRooms);
-
-        io.to(roomName).emit("START_BEFORE_GAME_TIMER", config.SECONDS_TIMER_BEFORE_START_GAME, getRandomTextId(texts));
-      }
+      gameStarter(socket, roomName, io);
     });
 
     socket.on("UPDATE_USER_STATUS", (ready, roomName) => {
       activeUsers = updateUserStatus(activeUsers, socket.id, ready);
 
-      io.in(roomName).emit("CHANGE_USER_STATUS", {
+      io.to(roomName).emit("CHANGE_USER_STATUS", {
         username: getUser(activeUsers, socket.id)?.name,
         ready: getUser(activeUsers, socket.id)?.isReady,
       });
 
-      if (handleGameStart(roomName)) {
-        activeRooms = updateRoomTimerStatus(activeRooms, roomName);
+      gameStarter(socket, roomName, io);
+    });
 
-        socket.emit("UPDATE_ROOMS", activeRooms);
-        socket.broadcast.emit("UPDATE_ROOMS", activeRooms);
+    socket.on("GAME_OVER", (roomName) => {
+      io.to(roomName).emit("SHOW_RESULT");
+    });
 
-        io.to(roomName).emit(
-          "START_GAME",
-          config.SECONDS_TIMER_BEFORE_START_GAME,
-          config.SECONDS_FOR_GAME,
-          getRandomTextId(texts)
-        );
-      }
+    socket.on("RESET_USERS_IN_ROOM", (roomName) => {
+      handleReset(roomName);
+      io.to(roomName).emit("UPDATE_ROOM_USERS", getUsersFromRoom(activeUsers, roomName));
+      socket.broadcast.emit("UPDATE_ROOMS", activeRooms);
     });
   });
+};
+
+const handleReset = (roomName) => {
+  activeUsers = resetUserStatus(activeUsers, roomName);
+  activeRooms = updateRoomTimerStatus(activeRooms, roomName, false);
 };
 
 const handleRoomLeave = (socket) => {
@@ -146,18 +138,29 @@ const handleEmptyRoom = (socket, user) => {
   }
 };
 
-const handleGameStart = (roomName) => {
-  if (
-    usersStatus(activeUsers, roomName) &&
-    getUsersFromRoom(activeUsers, roomName).length >= 2 &&
-    !getRoom(activeRooms, roomName)?.timerStarted
-  ) {
-    return true;
-  } else {
-    return false;
+const gameStarter = (socket, roomName, io) => {
+  if (canStartGame(roomName)) {
+    activeRooms = updateRoomTimerStatus(activeRooms, roomName, true);
+
+    socket.emit("UPDATE_ROOMS", activeRooms);
+    socket.broadcast.emit("UPDATE_ROOMS", activeRooms);
+
+    io.to(roomName).emit(
+      "START_GAME",
+      config.SECONDS_TIMER_BEFORE_START_GAME,
+      config.SECONDS_FOR_GAME,
+      getRandomTextId(texts)
+    );
   }
 };
 
-export const getRandomTextId = (array) => {
-  return Math.floor(Math.random() * array.length);
+const canStartGame = (roomName) =>
+  usersStatus(activeUsers, roomName) &&
+  getUsersFromRoom(activeUsers, roomName).length >= 2 &&
+  !getRoom(activeRooms, roomName)?.timerStarted
+    ? true
+    : false;
+
+export const getRandomTextId = (texts) => {
+  return Math.floor(Math.random() * texts.length);
 };

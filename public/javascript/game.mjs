@@ -1,4 +1,4 @@
-import { showInputModal, showMessageModal } from "./views/modal.mjs";
+import { showInputModal, showMessageModal, showResultsModal } from "./views/modal.mjs";
 import { appendRoomElement, removeRoomElement, updateNumberOfUsersInRoom } from "./views/room.mjs";
 import { addClass, removeClass } from "./helpers/domHelper.mjs";
 import { appendUserElement, changeReadyStatus, removeUserElement } from "./views/user.mjs";
@@ -131,7 +131,7 @@ const startBeforeGameTimer = async (time, gameTime, textId) => {
       removeClass(gameTimer, "display-none");
       removeClass(textContainer, "display-none");
 
-      addEventListener("keyup", handleKeyPress);
+      addEventListener("keyup", () => {});
 
       startGame(gameTime);
     } else {
@@ -146,9 +146,9 @@ const startGame = (time) => {
     if (time <= 0) {
       clearInterval(timerForGame);
 
-      removeEventListener("keyup", handleKeyPress);
+      removeEventListener("keyup", () => {});
 
-      socket.emit("GAME_OVER");
+      socket.emit("GAME_OVER", roomNameTag.innerText);
     } else {
       gameTimer.innerText = time - 1;
     }
@@ -156,8 +156,15 @@ const startGame = (time) => {
   }, 1000);
 };
 
-const handleKeyPress = (e) => {
-  console.log(textContainer.innerHTML);
+const showResultAndReset = () => {
+  addClass(gameTimer, "display-none");
+  addClass(textContainer, "display-none");
+  removeClass(leaveRoomButton, "display-none");
+
+  readyButton.innerText = "READY";
+  removeClass(readyButton, "display-none");
+
+  socket.emit("RESET_USERS_IN_ROOM", roomNameTag.innerText);
 };
 
 socket.on("IS_ACTIVE_USER", handleCommonUsernames);
@@ -169,3 +176,4 @@ socket.on("USER_LEFT_ROOM", userLeftRoom);
 socket.on("USER_JOINED_ROOM", userJoinedRoom);
 socket.on("CHANGE_USER_STATUS", changeReadyStatus);
 socket.on("START_GAME", startBeforeGameTimer);
+socket.on("SHOW_RESULT", showResultAndReset);
