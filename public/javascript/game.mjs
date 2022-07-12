@@ -16,6 +16,7 @@ const roomNameTag = document.getElementById("room-name");
 const readyButton = document.getElementById("ready-btn");
 const startTimer = document.getElementById("timer");
 const gameTimer = document.getElementById("game-timer");
+const gameTimerSeconds = document.getElementById("game-timer-seconds");
 const textContainer = document.getElementById("text-container");
 
 if (!username) {
@@ -114,14 +115,13 @@ leaveRoomButton.addEventListener("click", () => {
 
 const startBeforeGameTimer = async (time, gameTime, textId) => {
   const textObject = await getText(textId);
-  const text = textObject.text;
-  textContainer.innerText = text;
+  const gameText = textObject.text;
+  textContainer.innerText = gameText;
 
   addClass(leaveRoomButton, "display-none");
   addClass(readyButton, "display-none");
 
   startTimer.innerText = time;
-  gameTimer.innerText = gameTime;
   removeClass(startTimer, "display-none");
 
   const beforeGameTimer = setInterval(function () {
@@ -142,15 +142,16 @@ const startBeforeGameTimer = async (time, gameTime, textId) => {
 };
 
 const startGame = (time) => {
+  gameTimerSeconds.innerText = time;
+
   const timerForGame = setInterval(function () {
     if (time <= 0) {
       clearInterval(timerForGame);
-
       removeEventListener("keyup", () => {});
 
       socket.emit("GAME_OVER", roomNameTag.innerText);
     } else {
-      gameTimer.innerText = time - 1;
+      gameTimerSeconds.innerText = time - 1;
     }
     time -= 1;
   }, 1000);

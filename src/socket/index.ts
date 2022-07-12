@@ -33,7 +33,8 @@ export default (io: Server) => {
     if (isActiveUser(activeUsers, username)) {
       socket.emit("IS_ACTIVE_USER");
     } else {
-      activeUsers.push(createUser(username, socket.id));
+      const newUser = createUser(username, socket.id);
+      activeUsers.push(newUser);
     }
 
     socket.emit("UPDATE_ROOMS", activeRooms);

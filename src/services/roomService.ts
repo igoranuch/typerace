@@ -33,13 +33,13 @@ export const updateNumberOfUsers = (activeRooms: Room[], roomName: string, diff:
   );
 };
 
-export const getRoom = (activeRooms: Room[], roomName: string) => {
+export const getRoom = (activeRooms: Room[], roomName: string): Room | undefined => {
   return activeRooms.find((room) => {
     return room.name === roomName;
   });
 };
 
-export const updateRoomTimerStatus = (activeRooms: Room[], roomName: string, status: boolean) => {
+export const updateRoomTimerStatus = (activeRooms: Room[], roomName: string, status: boolean): Room[] => {
   return activeRooms.map((room) =>
     room.name === roomName
       ? {
