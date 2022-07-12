@@ -113,57 +113,44 @@ leaveRoomButton.addEventListener("click", () => {
   removeClass(roomsPage, "display-none");
 });
 
-const startBeforeGameTimer = async (time, gameTime, textId) => {
+const startGame = async (textId) => {
   const textObject = await getText(textId);
   const gameText = textObject.text;
   textContainer.innerText = gameText;
 
   addClass(leaveRoomButton, "display-none");
   addClass(readyButton, "display-none");
+};
 
+const startingTimerHandler = (time) => {
   startTimer.innerText = time;
   removeClass(startTimer, "display-none");
-
-  const beforeGameTimer = setInterval(function () {
-    if (time <= 0) {
-      clearInterval(beforeGameTimer);
-      addClass(startTimer, "display-none");
-      removeClass(gameTimer, "display-none");
-      removeClass(textContainer, "display-none");
-
-      addEventListener("keyup", () => {});
-
-      startGame(gameTime);
-    } else {
-      startTimer.innerText = time - 1;
-    }
-    time -= 1;
-  }, 1000);
 };
 
-const startGame = (time) => {
+const gameTimerHandler = (time) => {
+  addClass(startTimer, "display-none");
+  removeClass(textContainer, "display-none");
+
   gameTimerSeconds.innerText = time;
-
-  const timerForGame = setInterval(function () {
-    if (time <= 0) {
-      clearInterval(timerForGame);
-      removeEventListener("keyup", () => {});
-
-      socket.emit("GAME_OVER", roomNameTag.innerText);
-    } else {
-      gameTimerSeconds.innerText = time - 1;
-    }
-    time -= 1;
-  }, 1000);
+  removeClass(gameTimer, "display-none");
 };
 
-const showResultAndReset = () => {
+const showResultAndReset = (users) => {
   addClass(gameTimer, "display-none");
   addClass(textContainer, "display-none");
   removeClass(leaveRoomButton, "display-none");
 
   readyButton.innerText = "READY";
   removeClass(readyButton, "display-none");
+
+  showResultsModal({
+    usersSortedArray: users
+      .sort((a, b) => {
+        a.progress > b.progress;
+      })
+      .map((user) => user.name),
+    onClose: () => {},
+  });
 
   socket.emit("RESET_USERS_IN_ROOM", roomNameTag.innerText);
 };
@@ -176,5 +163,7 @@ socket.on("UPDATE_ROOM_USERS", updateRoomUsers);
 socket.on("USER_LEFT_ROOM", userLeftRoom);
 socket.on("USER_JOINED_ROOM", userJoinedRoom);
 socket.on("CHANGE_USER_STATUS", changeReadyStatus);
-socket.on("START_GAME", startBeforeGameTimer);
+socket.on("START_GAME", startGame);
+socket.on("STARTING_TIMER", startingTimerHandler);
+socket.on("GAME_TIMER", gameTimerHandler);
 socket.on("SHOW_RESULT", showResultAndReset);

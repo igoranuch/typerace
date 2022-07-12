@@ -22,6 +22,7 @@ import { Server } from "socket.io";
 import { texts } from "../data";
 import { Room, User } from "../types/types";
 import * as config from "../socket/config";
+import { Socket } from "dgram";
 
 let activeUsers: User[] = [];
 let activeRooms: Room[] = [];
@@ -146,13 +147,31 @@ const gameStarter = (socket, roomName, io) => {
     socket.emit("UPDATE_ROOMS", activeRooms);
     socket.broadcast.emit("UPDATE_ROOMS", activeRooms);
 
-    io.to(roomName).emit(
-      "START_GAME",
-      config.SECONDS_TIMER_BEFORE_START_GAME,
-      config.SECONDS_FOR_GAME,
-      getRandomTextId(texts)
-    );
+    io.to(roomName).emit("START_GAME", getRandomTextId(texts));
+    timer(config.SECONDS_TIMER_BEFORE_START_GAME, config.SECONDS_FOR_GAME, roomName, io);
   }
+};
+
+const timer = (timer, gameTimer, roomName, io) => {
+  io.to(roomName).emit("STARTING_TIMER", timer);
+  const beforeGameTimer = setInterval(function () {
+    if (timer <= 0) {
+      clearInterval(beforeGameTimer);
+      io.to(roomName).emit("GAME_TIMER", gameTimer);
+      const forGameTimer = setInterval(function () {
+        if (gameTimer <= 0) {
+          clearInterval(forGameTimer);
+          io.to(roomName).emit("SHOW_RESULT", getUsersFromRoom(activeUsers, roomName));
+        } else {
+          io.to(roomName).emit("GAME_TIMER", gameTimer - 1);
+          gameTimer -= 1;
+        }
+      }, 1000);
+    } else {
+      io.to(roomName).emit("STARTING_TIMER", timer - 1);
+      timer -= 1;
+    }
+  }, 1000);
 };
 
 const canStartGame = (roomName) =>
