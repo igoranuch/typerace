@@ -1,28 +1,10 @@
-import {
-  createRoom,
-  deleteRoom,
-  getRoom,
-  isActiveRoom,
-  updateNumberOfUsers,
-  updateRoomTimerStatus,
-} from "../services/roomService";
-import {
-  addUserRoom,
-  createUser,
-  deleteUser,
-  getUser,
-  getUsersFromRoom,
-  isActiveUser,
-  removeUserRoom,
-  resetUserStatus,
-  updateUserProgress,
-  updateUserStatus,
-  usersStatus,
-} from "../services/userService";
+import { RoomService } from "../services/roomService";
+import { UserService } from "../services/userService";
 import { Server } from "socket.io";
 import { texts } from "../data";
-import { Room, User, UserProgress } from "../types/types";
+import { Room, User, UserProgress } from "../types";
 import * as config from "../socket/config";
+import { getRandomTextId } from "../helpers";
 
 let activeUsers: User[] = [];
 let activeRooms: Room[] = [];
@@ -31,10 +13,10 @@ export default (io: Server) => {
   io.on("connection", (socket) => {
     const username = socket.handshake.query.username as string;
 
-    if (isActiveUser(activeUsers, username)) {
+    if (UserService.isActiveUser(activeUsers, username)) {
       socket.emit("IS_ACTIVE_USER");
     } else {
-      const newUser = createUser(username, socket.id);
+      const newUser = UserService.createUser(username, socket.id);
       activeUsers.push(newUser);
     }
 
@@ -43,32 +25,32 @@ export default (io: Server) => {
     socket.on("disconnect", () => {
       handleRoomLeave(socket);
 
-      activeUsers = deleteUser(activeUsers, socket.id);
+      activeUsers = UserService.deleteUser(activeUsers, socket.id);
     });
 
     socket.on("CREATE_ROOM", (roomName, callback) => {
-      const isActive = isActiveRoom(activeRooms, roomName);
+      const isActive = RoomService.isActiveRoom(activeRooms, roomName);
 
       if (!isActive) {
-        const newRoom: Room = createRoom(roomName, 0);
+        const newRoom: Room = RoomService.createRoom(roomName, 0);
         activeRooms.push(newRoom);
         socket.emit("UPDATE_ROOMS", activeRooms);
         socket.broadcast.emit("UPDATE_ROOMS", activeRooms);
-        socket.emit("UPDATE_ROOM_USERS", getUsersFromRoom(activeUsers, roomName));
+        socket.emit("UPDATE_ROOM_USERS", UserService.getUsersFromRoom(activeUsers, roomName));
       }
 
       callback(isActive);
     });
 
     socket.on("JOIN_ROOM", (roomName) => {
-      activeRooms = updateNumberOfUsers(activeRooms, roomName, 1);
-      activeUsers = addUserRoom(activeUsers, socket.id, roomName);
+      activeRooms = RoomService.updateNumberOfUsers(activeRooms, roomName, 1);
+      activeUsers = UserService.addUserRoom(activeUsers, socket.id, roomName);
       socket.join(roomName);
 
-      socket.emit("UPDATE_ROOM_USERS", getUsersFromRoom(activeUsers, roomName));
-      socket.broadcast.emit("UPDATE_ROOM_COUNTER", getRoom(activeRooms, roomName));
+      socket.emit("UPDATE_ROOM_USERS", UserService.getUsersFromRoom(activeUsers, roomName));
+      socket.broadcast.emit("UPDATE_ROOM_COUNTER", RoomService.getRoom(activeRooms, roomName));
       socket.broadcast.emit("UPDATE_ROOMS", activeRooms);
-      socket.to(roomName).emit("USER_JOINED_ROOM", getUser(activeUsers, socket.id));
+      socket.to(roomName).emit("USER_JOINED_ROOM", UserService.getUser(activeUsers, socket.id));
     });
 
     socket.on("LEAVE_ROOM", (roomName) => {
@@ -77,50 +59,50 @@ export default (io: Server) => {
     });
 
     socket.on("UPDATE_USER_STATUS", (ready, roomName) => {
-      activeUsers = updateUserStatus(activeUsers, socket.id, ready);
+      activeUsers = UserService.updateUserStatus(activeUsers, socket.id, ready);
 
       io.to(roomName).emit("CHANGE_USER_STATUS", {
-        username: getUser(activeUsers, socket.id)?.name,
-        ready: getUser(activeUsers, socket.id)?.isReady,
+        username: UserService.getUser(activeUsers, socket.id)?.name,
+        ready: UserService.getUser(activeUsers, socket.id)?.isReady,
       });
 
       gameStarter(socket, roomName, io);
     });
 
     socket.on("UPDATE_PROGRESS", (userProgress, roomName) => {
-      activeUsers = updateUserProgress(activeUsers, socket.id, userProgress as UserProgress);
+      activeUsers = UserService.updateUserProgress(activeUsers, socket.id, userProgress as UserProgress);
 
-      io.to(roomName).emit("UPDATE_PROGRESS_BARS", getUsersFromRoom(activeUsers, roomName));
+      io.to(roomName).emit("UPDATE_PROGRESS_BARS", UserService.getUsersFromRoom(activeUsers, roomName));
     });
 
     socket.on("RESET_USERS_IN_ROOM", (roomName) => {
       handleReset(roomName);
-      io.to(roomName).emit("UPDATE_ROOM_USERS", getUsersFromRoom(activeUsers, roomName));
+      io.to(roomName).emit("UPDATE_ROOM_USERS", UserService.getUsersFromRoom(activeUsers, roomName));
       socket.broadcast.emit("UPDATE_ROOMS", activeRooms);
     });
   });
 };
 
 const handleReset = (roomName) => {
-  activeUsers = resetUserStatus(activeUsers, roomName);
-  activeRooms = updateRoomTimerStatus(activeRooms, roomName, false);
+  activeUsers = UserService.resetUserStatus(activeUsers, roomName);
+  activeRooms = RoomService.updateRoomTimerStatus(activeRooms, roomName, false);
 };
 
 const handleRoomLeave = (socket) => {
-  const user = getUser(activeUsers, socket.id);
+  const user = UserService.getUser(activeUsers, socket.id);
 
   if (user && user.room) {
-    socket.to(user.room).emit("USER_LEFT_ROOM", getUser(activeUsers, socket.id)?.name);
+    socket.to(user.room).emit("USER_LEFT_ROOM", UserService.getUser(activeUsers, socket.id)?.name);
 
-    activeRooms = updateNumberOfUsers(activeRooms, user.room, -1);
-    activeUsers = removeUserRoom(activeUsers, socket.id);
+    activeRooms = RoomService.updateNumberOfUsers(activeRooms, user.room, -1);
+    activeUsers = UserService.removeUserRoom(activeUsers, socket.id);
     socket.leave(user.room);
 
-    if (!getRoom(activeRooms, user.room)?.timerStarted) {
-      socket.emit("UPDATE_ROOM_COUNTER", getRoom(activeRooms, user.room));
+    if (!RoomService.getRoom(activeRooms, user.room)?.timerStarted) {
+      socket.emit("UPDATE_ROOM_COUNTER", RoomService.getRoom(activeRooms, user.room));
       socket.emit("UPDATE_ROOMS", activeRooms);
 
-      socket.broadcast.emit("UPDATE_ROOM_COUNTER", getRoom(activeRooms, user.room));
+      socket.broadcast.emit("UPDATE_ROOM_COUNTER", RoomService.getRoom(activeRooms, user.room));
       socket.broadcast.emit("UPDATE_ROOMS", activeRooms);
     }
 
@@ -129,10 +111,10 @@ const handleRoomLeave = (socket) => {
 };
 
 const handleEmptyRoom = (socket, user) => {
-  const room = getRoom(activeRooms, user.room);
+  const room = RoomService.getRoom(activeRooms, user.room);
 
   if (room?.numberOfUsers === 0) {
-    activeRooms = deleteRoom(activeRooms, room.name);
+    activeRooms = RoomService.deleteRoom(activeRooms, room.name);
 
     socket.emit("EMPTY_ROOM", room.name);
     socket.emit("UPDATE_ROOMS", activeRooms);
@@ -144,7 +126,7 @@ const handleEmptyRoom = (socket, user) => {
 
 const gameStarter = (socket, roomName, io) => {
   if (canStartGame(roomName)) {
-    activeRooms = updateRoomTimerStatus(activeRooms, roomName, true);
+    activeRooms = RoomService.updateRoomTimerStatus(activeRooms, roomName, true);
 
     socket.emit("UPDATE_ROOMS", activeRooms);
     socket.broadcast.emit("UPDATE_ROOMS", activeRooms);
@@ -164,7 +146,7 @@ const timer = (timer, gameTimer, roomName, io) => {
       const forGameTimer = setInterval(function () {
         if (gameTimer <= 0 || isGameEnd(roomName)) {
           clearInterval(forGameTimer);
-          io.to(roomName).emit("SHOW_RESULT", getUsersFromRoom(activeUsers, roomName));
+          io.to(roomName).emit("SHOW_RESULT", UserService.getUsersFromRoom(activeUsers, roomName));
         } else {
           io.to(roomName).emit("GAME_TIMER", gameTimer - 1);
           gameTimer -= 1;
@@ -178,18 +160,14 @@ const timer = (timer, gameTimer, roomName, io) => {
 };
 
 const isGameEnd = (roomName) => {
-  const users = getUsersFromRoom(activeUsers, roomName);
+  const users = UserService.getUsersFromRoom(activeUsers, roomName);
 
   return users.every((user) => user.progress === 100);
 };
 
 const canStartGame = (roomName) =>
-  usersStatus(activeUsers, roomName) &&
-  getUsersFromRoom(activeUsers, roomName).length >= 2 &&
-  !getRoom(activeRooms, roomName)?.timerStarted
+  UserService.usersStatus(activeUsers, roomName) &&
+  UserService.getUsersFromRoom(activeUsers, roomName).length >= 2 &&
+  !RoomService.getRoom(activeRooms, roomName)?.timerStarted
     ? true
     : false;
-
-export const getRandomTextId = (texts) => {
-  return Math.floor(Math.random() * texts.length);
-};
