@@ -4,6 +4,7 @@ export type User = {
   isReady: boolean;
   room: string | null;
   progress: number;
+  time: number;
 };
 
 export type Room = {
@@ -11,4 +12,9 @@ export type Room = {
   numberOfUsers: number;
   isFull: boolean;
   timerStarted: boolean;
+};
+
+export type UserProgress = {
+  progress: number;
+  time: number;
 };

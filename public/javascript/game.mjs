@@ -1,7 +1,7 @@
 import { showInputModal, showMessageModal, showResultsModal } from "./views/modal.mjs";
 import { appendRoomElement, removeRoomElement, updateNumberOfUsersInRoom } from "./views/room.mjs";
 import { addClass, removeClass } from "./helpers/domHelper.mjs";
-import { appendUserElement, changeReadyStatus, removeUserElement } from "./views/user.mjs";
+import { appendUserElement, changeReadyStatus, removeUserElement, setProgress } from "./views/user.mjs";
 import { getText } from "./api/api.mjs";
 
 const username = sessionStorage.getItem("username");
@@ -22,6 +22,8 @@ const textContainer = document.getElementById("text-container");
 if (!username) {
   window.location.replace("/login");
 }
+
+let gameText, current, typed;
 
 const socket = io("", { query: { username } });
 
@@ -136,6 +138,8 @@ const gameTimerHandler = (time) => {
 };
 
 const showResultAndReset = (users) => {
+  removeEventListener("keyup", gameHandler);
+
   addClass(gameTimer, "display-none");
   addClass(textContainer, "display-none");
   removeClass(leaveRoomButton, "display-none");
@@ -145,14 +149,47 @@ const showResultAndReset = (users) => {
 
   showResultsModal({
     usersSortedArray: users
-      .sort((a, b) => {
-        a.progress > b.progress;
+      .sort((x, y) => {
+        return y.progress - x.progress || y.time - x.time;
       })
       .map((user) => user.name),
     onClose: () => {},
   });
 
   socket.emit("RESET_USERS_IN_ROOM", roomNameTag.innerText);
+};
+
+const handleGameStart = () => {
+  gameText = textContainer.innerText;
+  current = gameText[0];
+  typed = "";
+  addEventListener("keyup", gameHandler);
+};
+
+const gameHandler = (e) => {
+  if (e.key === current) {
+    typed += current;
+    current = gameText[typed.length];
+
+    textContainer.innerHTML =
+      `<span class="typed">${typed}</span><span class="current">${current ? current : ""}</span>` +
+      gameText.substring(typed.length + 1);
+
+    // console.log(typed, current);
+
+    const progress = Math.ceil((typed.length / gameText.length) * 100);
+    const time = Number(gameTimerSeconds.innerText);
+
+    console.log(time, progress);
+
+    socket.emit("UPDATE_PROGRESS", { progress, time }, roomNameTag.innerText);
+  }
+};
+
+const updateProgressBars = (users) => {
+  users.forEach((user) => {
+    setProgress({ username: user.name, progress: user.progress });
+  });
 };
 
 socket.on("IS_ACTIVE_USER", handleCommonUsernames);
@@ -167,3 +204,5 @@ socket.on("START_GAME", startGame);
 socket.on("STARTING_TIMER", startingTimerHandler);
 socket.on("GAME_TIMER", gameTimerHandler);
 socket.on("SHOW_RESULT", showResultAndReset);
+socket.on("GAME_SETTINGS", handleGameStart);
+socket.on("UPDATE_PROGRESS_BARS", updateProgressBars);

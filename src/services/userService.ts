@@ -1,4 +1,5 @@
 import { User } from "../types/types";
+import { SECONDS_FOR_GAME } from "../socket/config";
 
 export const createUser = (username: string, socketId: string): User => {
   return {
@@ -7,6 +8,7 @@ export const createUser = (username: string, socketId: string): User => {
     isReady: false,
     room: null,
     progress: 0,
+    time: 0,
   };
 };
 
@@ -26,9 +28,10 @@ export const addUserRoom = (activeUsers: User[], socketId: string, roomName: str
       ? {
           id: socketId,
           name: user.name,
-          isReady: false,
+          isReady: user.isReady,
           room: roomName,
-          progress: 0,
+          progress: user.progress,
+          time: user.time,
         }
       : user
   );
@@ -40,9 +43,10 @@ export const removeUserRoom = (activeUsers: User[], socketId: string): User[] =>
       ? {
           id: socketId,
           name: user.name,
-          isReady: false,
+          isReady: user.isReady,
           room: null,
-          progress: 0,
+          progress: user.progress,
+          time: user.time,
         }
       : user
   );
@@ -61,7 +65,7 @@ export const getUsersFromRoom = (activeUsers: User[], roomName: string): User[] 
 export const updateUserStatus = (activeUsers: User[], socketId: string, ready: boolean): User[] => {
   return activeUsers.map((user) =>
     user.id === socketId
-      ? { id: user.id, name: user.name, isReady: ready, progress: user.progress, room: user.room }
+      ? { id: user.id, name: user.name, isReady: ready, progress: user.progress, room: user.room, time: user.time }
       : user
   );
 };
@@ -74,6 +78,25 @@ export const usersStatus = (activeUsers: User[], roomName: string): boolean => {
 
 export const resetUserStatus = (activeUsers: User[], roomName: string): User[] => {
   return activeUsers.map((user) =>
-    roomName === user.room ? { id: user.id, name: user.name, isReady: false, progress: 0, room: user.room } : user
+    roomName === user.room
+      ? { id: user.id, name: user.name, isReady: false, progress: 0, room: user.room, time: 0 }
+      : user
+  );
+};
+
+export const updateUserProgress = (activeUsers: User[], socketId: string, userProgress) => {
+  const { progress, time } = userProgress;
+
+  return activeUsers.map((user) =>
+    user.id === socketId
+      ? {
+          id: user.id,
+          name: user.name,
+          isReady: user.isReady,
+          progress,
+          room: user.room,
+          time,
+        }
+      : user
   );
 };

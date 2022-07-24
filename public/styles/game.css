@@ -69,10 +69,14 @@
   background-color: green;
 }
 
-.finished {
-  background-color: greenyellow !important;
+.current {
+  text-decoration: underline solid seagreen;
 }
 
 .typed {
   background-color: green;
+}
+
+.finished {
+  background-color: greenyellow !important;
 }

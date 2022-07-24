@@ -15,14 +15,14 @@ import {
   isActiveUser,
   removeUserRoom,
   resetUserStatus,
+  updateUserProgress,
   updateUserStatus,
   usersStatus,
 } from "../services/userService";
 import { Server } from "socket.io";
 import { texts } from "../data";
-import { Room, User } from "../types/types";
+import { Room, User, UserProgress } from "../types/types";
 import * as config from "../socket/config";
-import { Socket } from "dgram";
 
 let activeUsers: User[] = [];
 let activeRooms: Room[] = [];
@@ -87,8 +87,10 @@ export default (io: Server) => {
       gameStarter(socket, roomName, io);
     });
 
-    socket.on("GAME_OVER", (roomName) => {
-      io.to(roomName).emit("SHOW_RESULT");
+    socket.on("UPDATE_PROGRESS", (userProgress, roomName) => {
+      activeUsers = updateUserProgress(activeUsers, socket.id, userProgress as UserProgress);
+
+      io.to(roomName).emit("UPDATE_PROGRESS_BARS", getUsersFromRoom(activeUsers, roomName));
     });
 
     socket.on("RESET_USERS_IN_ROOM", (roomName) => {
@@ -157,9 +159,10 @@ const timer = (timer, gameTimer, roomName, io) => {
   const beforeGameTimer = setInterval(function () {
     if (timer <= 0) {
       clearInterval(beforeGameTimer);
+      io.to(roomName).emit("GAME_SETTINGS");
       io.to(roomName).emit("GAME_TIMER", gameTimer);
       const forGameTimer = setInterval(function () {
-        if (gameTimer <= 0) {
+        if (gameTimer <= 0 || isGameEnd(roomName)) {
           clearInterval(forGameTimer);
           io.to(roomName).emit("SHOW_RESULT", getUsersFromRoom(activeUsers, roomName));
         } else {
@@ -172,6 +175,12 @@ const timer = (timer, gameTimer, roomName, io) => {
       timer -= 1;
     }
   }, 1000);
+};
+
+const isGameEnd = (roomName) => {
+  const users = getUsersFromRoom(activeUsers, roomName);
+
+  return users.every((user) => user.progress === 100);
 };
 
 const canStartGame = (roomName) =>
