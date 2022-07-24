@@ -138,12 +138,14 @@ const gameStarter = (socket, roomName, io) => {
 
 const timer = (timer, gameTimer, roomName, io) => {
   io.to(roomName).emit("STARTING_TIMER", timer);
-  const beforeGameTimer = setInterval(function () {
+
+  const beforeGameTimer = setInterval(() => {
     if (timer <= 0) {
       clearInterval(beforeGameTimer);
       io.to(roomName).emit("GAME_SETTINGS");
       io.to(roomName).emit("GAME_TIMER", gameTimer);
-      const forGameTimer = setInterval(function () {
+
+      const forGameTimer = setInterval(() => {
         if (gameTimer <= 0 || isGameEnd(roomName)) {
           clearInterval(forGameTimer);
           io.to(roomName).emit("SHOW_RESULT", UserService.getUsersFromRoom(activeUsers, roomName));

@@ -175,12 +175,8 @@ const gameHandler = (e) => {
       `<span class="typed">${typed}</span><span class="current">${current ? current : ""}</span>` +
       gameText.substring(typed.length + 1);
 
-    // console.log(typed, current);
-
     const progress = Math.ceil((typed.length / gameText.length) * 100);
     const time = Number(gameTimerSeconds.innerText);
-
-    console.log(time, progress);
 
     socket.emit("UPDATE_PROGRESS", { progress, time }, roomNameTag.innerText);
   }
